@@ -19,13 +19,10 @@
 #include "defines.h"
 #include <stdint.h>
 #include <util/twi.h>
-
 #include "lcd.c"
-
-
 #include "display.h"
-
 #include "text.h"
+
 
 //#include <Wire.h> // ok
 //#include <U8g2lib.h>
@@ -35,6 +32,10 @@
 
 //U8X8_SSD1327_WS_128X128_HW_I2C u8x8(A4,A5); // ok
 // https://github.com/olikraus/u8g2/wiki/u8g2setupc#ssd1327-ws_128x128
+
+
+// I2C address of the SSD1327 OLED display (assuming default 0x3D)
+#define SSD1327_ADDRESS 0x3D
 
 
 #define LOOPLEDPORT		PORTD
@@ -84,7 +85,59 @@ uint16_t displayfenstercounter = 0; // counter fuer abgelaufene Zeit im Display-
 
 //extern uint8_t display_init(void);//
 
+// i2c
+void i2c_init(void) {
+    // Set SCL frequency to 100kHz with a 16MHz system clock
+    TWSR = 0x00;
+    TWBR = 0x48;  // (16MHz / 100kHz - 16) / 2 = 72 = 0x48
+    TWCR = (1 << TWEN);  // Enable TWI
+}
 
+void i2c_start(void) {
+    TWCR = (1 << TWINT) | (1 << TWSTA) | (1 << TWEN);
+    while (!(TWCR & (1 << TWINT)));
+}
+
+void i2c_stop(void) {
+    TWCR = (1 << TWINT) | (1 << TWSTO) | (1 << TWEN);
+}
+
+void i2c_write(uint8_t data) {
+    TWDR = data;
+    TWCR = (1 << TWINT) | (1 << TWEN);
+    while (!(TWCR & (1 << TWINT)));
+}
+void oled_command(uint8_t command) {
+    i2c_start();
+    i2c_write((SSD1327_ADDRESS << 1) | 0); // 0 for write
+    i2c_write(0x80); // Co = 1, D/C# = 0
+    i2c_write(command);
+    i2c_stop();
+}
+
+void oled_data(uint8_t data) {
+    i2c_start();
+    i2c_write((SSD1327_ADDRESS << 1) | 0); // 0 for write
+    i2c_write(0x40); // Co = 0, D/C# = 1
+    i2c_write(data);
+    i2c_stop();
+}
+void oled_init(void) {
+    // Example initialization sequence (refer to SSD1327 datasheet)
+    oled_command(0xAE); // Display off
+    oled_command(0xA8); // Set multiplex ratio
+    oled_command(0x7F); // 128MUX
+    oled_command(0xA1); // Set display start line
+    oled_command(0x00); // Start line 0
+    oled_command(0xA2); // Set display offset
+    oled_command(0x00); // Offset 0
+    oled_command(0xA4); // Normal display
+    oled_command(0xA6); // Set normal display mode
+    oled_command(0xAF); // Display on
+}
+
+
+// end i2c
 
 
 void spi_init(void) // SPI-Pins aktivieren
@@ -201,9 +254,11 @@ int main (void)
 	_delay_ms(800);
 	lcd_cls();
 	lcd_puts("A328_PIO_Start");
-	
-   
-   
+	_delay_ms(2);
+   i2c_init();
+_delay_ms(2);
+   oled_init();
+   _delay_ms(2);
 	//uint16_t loopcount0=0;
    uint16_t loopcount0=0;
    uint16_t loopcount1=0;
@@ -216,22 +271,17 @@ int main (void)
 
    
    sei();
-   
 
-    
-  
-  
 	while (1)
    {  
       //OSZI_B_LO();
       // Timing: loop: 40 us, takt 85us, mit if-teil 160 us
       wdt_reset();
       
-
       
          
          loopcount0++;
-         if (loopcount0>=refreshtakt)
+         if (loopcount0>=2*refreshtakt)
          {
             //OSZI_B_LO();
             //OSZIATOG;
@@ -246,6 +296,33 @@ int main (void)
                lcd_gotoxy(0,1);
                lcd_putint(loopcount2);
                loopcount2++;
+
+               // OLED
+               SYNC_LO();
+         
+               oled_command(0x21); // Column address
+               oled_command(0x00); // Column start address
+               oled_command(0x7F); // Column end address
+               oled_command(0x22); // Page address
+               oled_command(0x00); // Page start address
+               oled_command(0x07); // Page end address
+
+               for (uint16_t i = 0; i < 128 * 8; i++) 
+               {
+                  oled_data(0xFF); // Fill the screen with pattern
+               }
+               SYNC_HI();
+               if (loopcount2 > 10)
+               {
+                  loopcount2 = 0;
+                for (uint16_t i = 0; i < 128 * 8; i++) 
+               {
+                     oled_data(0x00); // Clear the screen
+               }
+                 
+               }
+               
+
             }
             
             

@@ -1,0 +1,86 @@
+// prompt: atmega328p with a waveshare oled 1.5inch display with driver ssd1327 using i2c without arduino
+
+#include <avr/io.h>
+#include <util/delay.h>
+
+// I2C address of the SSD1327 OLED display (assuming default 0x3D)
+#define SSD1327_ADDRESS 0x3D
+
+void i2c_init(void) {
+    // Set SCL frequency to 100kHz with a 16MHz system clock
+    TWSR = 0x00;
+    TWBR = 0x48;  // (16MHz / 100kHz - 16) / 2 = 72 = 0x48
+    TWCR = (1 << TWEN);  // Enable TWI
+}
+
+void i2c_start(void) {
+    TWCR = (1 << TWINT) | (1 << TWSTA) | (1 << TWEN);
+    while (!(TWCR & (1 << TWINT)));
+}
+
+void i2c_stop(void) {
+    TWCR = (1 << TWINT) | (1 << TWSTO) | (1 << TWEN);
+}
+
+void i2c_write(uint8_t data) {
+    TWDR = data;
+    TWCR = (1 << TWINT) | (1 << TWEN);
+    while (!(TWCR & (1 << TWINT)));
+}
+
+void oled_command(uint8_t command) {
+    i2c_start();
+    i2c_write((SSD1327_ADDRESS << 1) | 0); // 0 for write
+    i2c_write(0x80); // Co = 1, D/C# = 0
+    i2c_write(command);
+    i2c_stop();
+}
+
+void oled_data(uint8_t data) {
+    i2c_start();
+    i2c_write((SSD1327_ADDRESS << 1) | 0); // 0 for write
+    i2c_write(0x40); // Co = 0, D/C# = 1
+    i2c_write(data);
+    i2c_stop();
+}
+
+void oled_init(void) {
+    // Example initialization sequence (refer to SSD1327 datasheet)
+    oled_command(0xAE); // Display off
+    oled_command(0xA8); // Set multiplex ratio
+    oled_command(0x7F); // 128MUX
+    oled_command(0xA1); // Set display start line
+    oled_command(0x00); // Start line 0
+    oled_command(0xA2); // Set display offset
+    oled_command(0x00); // Offset 0
+    oled_command(0xA4); // Normal display
+    oled_command(0xA6); // Set normal display mode
+    oled_command(0xAF); // Display on
+}
+
+int main(void) {
+    i2c_init();
+    oled_init();
+    
+    while (1) {
+        // Your main loop code here
+        oled_command(0x21); // Column address
+        oled_command(0x00); // Column start address
+        oled_command(0x7F); // Column end address
+        oled_command(0x22); // Page address
+        oled_command(0x00); // Page start address
+        oled_command(0x07); // Page end address
+
+        for (uint16_t i = 0; i < 128 * 8; i++) {
+            oled_data(0xFF); // Fill the screen with pattern
+        }
+
+        _delay_ms(1000);
+
+        for (uint16_t i = 0; i < 128 * 8; i++) {
+            oled_data(0x00); // Clear the screen
+        }
+
+        _delay_ms(1000);
+    }
+}
