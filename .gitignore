@@ -1,0 +1,7 @@
+.pio
+.vscode/*
+avr-libc/*
+include/*
+lib/*
+test/*
+u8g2/*
