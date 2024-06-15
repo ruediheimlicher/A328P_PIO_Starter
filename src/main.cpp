@@ -23,13 +23,18 @@
 #include "lcd.c"
 
 
-#include "display.h"
+//#include "display.h"
 
 #include "text.h"
 
 //#include <Wire.h> // ok
 //#include <U8g2lib.h>
 //#include <U8x8lib.h>
+
+#include "DEV_Config.h"
+#include"OLED_Driver.h"
+
+//#include "Adafruit_SSD1327.h"
 
 // U8X8_SSD1327_WS_128X128_HW_I2C([reset [, clock, data]])
 
@@ -43,6 +48,13 @@
 
 #define INT0_RISING	   0
 #define INT0_FALLING		1
+
+// Adafruit
+// Used for I2C or SPI
+#define OLED_RESET -1
+// I2C
+//Adafruit_SSD1327 display(128, 128, &Wire, OLED_RESET, 1000000);
+
 
 
 volatile uint8_t   loopstatus=0x00;            
@@ -63,9 +75,6 @@ volatile uint8_t   address=0x00;
 volatile uint8_t   data=0x00;   
 
 
-
-
-
 volatile uint8_t   taskcounter = 0;
 
 
@@ -83,8 +92,6 @@ uint16_t displaycounter1;
 uint16_t displayfenstercounter = 0; // counter fuer abgelaufene Zeit im Display-Fenster
 
 //extern uint8_t display_init(void);//
-
-
 
 
 void spi_init(void) // SPI-Pins aktivieren
