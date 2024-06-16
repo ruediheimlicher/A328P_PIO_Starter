@@ -7,7 +7,7 @@
 //
 
 #include <Arduino.h> 
-//#include <Wire.h>
+#include <Wire.h>
 
 #include <avr/io.h>
 #include <util/delay.h>
@@ -25,7 +25,9 @@
 #include "text.h"
 
 #include <Adafruit_SSD1327.h>
+#include <Adafruit_GFX.h>
 #include <splash.h>
+
 //#include <Wire.h> // ok
 //#include <U8g2lib.h>
 //#include <U8x8lib.h>
@@ -38,6 +40,53 @@
 
 // I2C address of the SSD1327 OLED display (assuming default 0x3D)
 #define SSD1327_ADDRESS 0x3D
+
+
+// Used for software SPI
+#define OLED_CLK 13
+#define OLED_MOSI 11
+
+// Used for software or hardware SPI
+#define OLED_CS 10
+#define OLED_DC 8
+
+
+
+
+// Used for I2C or SPI
+#define OLED_RESET -1
+// I2C
+Adafruit_SSD1327 display(128, 128, &Wire, OLED_RESET, 1000000);
+
+#define NUMFLAKES 10
+#define XPOS 0
+#define YPOS 1
+#define DELTAY 2
+
+
+#define LOGO16_GLCD_HEIGHT 16 
+#define LOGO16_GLCD_WIDTH  16 
+static const unsigned char PROGMEM logo16_glcd_bmp[] =
+{ B00000000, B11000000,
+  B00000001, B11000000,
+  B00000001, B11000000,
+  B00000011, B11100000,
+  B11110011, B11100000,
+  B11111110, B11111000,
+  B01111110, B11111111,
+  B00110011, B10011111,
+  B00011111, B11111100,
+  B00001101, B01110000,
+  B00011011, B10100000,
+  B00111111, B11100000,
+  B00111111, B11110000,
+  B01111100, B11110000,
+  B01110000, B01110000,
+  B00000000, B00110000 };
+
+
+
+
 
 #define LOOPLEDPORT		PORTD
 #define LOOPLEDDDR      DDRD
@@ -488,7 +537,7 @@ int main (void)
    
    
 	slaveinit();
-   
+   //Serial.begin(9600);
  //  int0_init();
 	
 	// initialize the LCD 
@@ -500,9 +549,9 @@ int main (void)
 	lcd_puts("A328_PIO_Start");
 
 	_delay_ms(2);
-   i2c_init();
+   //i2c_init();
    _delay_ms(2);
-   oled_init();
+   //oled_init();
    _delay_ms(2);
 	//uint16_t loopcount0=0;
    uint16_t loopcount0=0;
@@ -513,9 +562,13 @@ int main (void)
 	_delay_ms(2);
    //u8x8.begin(); // blocks loop
    _delay_ms(2);
-
-   
    sei();
+   // Adafruit
+   display.begin(0x3D, OLED_RESET);
+   //display.clearDisplay();
+   //display.display();
+   //display.drawPixel(10, 10, SSD1327_WHITE);
+   
 
 	while (1)
    {  
