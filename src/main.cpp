@@ -7,6 +7,7 @@
 //
 
 #include <Arduino.h> 
+//#include <Wire.h>
 
 #include <avr/io.h>
 #include <util/delay.h>
@@ -23,7 +24,8 @@
 #include "display.h"
 #include "text.h"
 
-
+#include <Adafruit_SSD1327.h>
+#include <splash.h>
 //#include <Wire.h> // ok
 //#include <U8g2lib.h>
 //#include <U8x8lib.h>
@@ -36,7 +38,6 @@
 
 // I2C address of the SSD1327 OLED display (assuming default 0x3D)
 #define SSD1327_ADDRESS 0x3D
-
 
 #define LOOPLEDPORT		PORTD
 #define LOOPLEDDDR      DDRD
@@ -86,10 +87,13 @@ uint16_t displayfenstercounter = 0; // counter fuer abgelaufene Zeit im Display-
 //extern uint8_t display_init(void);//
 
 // i2c
+
+#define SCL_CLOCK  100000L
+
 void i2c_init(void) {
     // Set SCL frequency to 100kHz with a 16MHz system clock
     TWSR = 0x00;
-    TWBR = 0x48;  // (16MHz / 100kHz - 16) / 2 = 72 = 0x48
+    TWBR = 0x24;  // (16MHz / 100kHz - 16) / 2 = 72 = 0x48
     TWCR = (1 << TWEN);  // Enable TWI
 }
 
@@ -122,8 +126,107 @@ void oled_data(uint8_t data) {
     i2c_write(data);
     i2c_stop();
 }
+
+// Basic 5x7 font
+const uint8_t font5x7[][5] PROGMEM = {
+    // Add character patterns here (for simplicity, not all characters are included)
+    {0x00, 0x00, 0x00, 0x00, 0x00}, // ' ' (space)
+    {0x00, 0x00, 0x5F, 0x00, 0x00}, // '!'
+    {0x00, 0x07, 0x00, 0x07, 0x00}, // '"'
+    // Add more characters as needed
+};
+const uint8_t font[27][5] = {
+    {0x7E, 0x11, 0x11, 0x11, 0x7E}, // A
+    {0x7F, 0x49, 0x49, 0x49, 0x36}, // B
+    {0x3E, 0x41, 0x41, 0x41, 0x22}, // C
+    {0x7F, 0x41, 0x41, 0x41, 0x3E}, // D
+    {0x7F, 0x49, 0x49, 0x49, 0x41}, // E
+    {0x7F, 0x09, 0x09, 0x09, 0x01}, // F
+    {0x3E, 0x41, 0x49, 0x49, 0x7A}, // G
+    {0x7F, 0x08, 0x08, 0x08, 0x7F}, // H
+    {0x00, 0x41, 0x7F, 0x41, 0x00}, // I
+    {0x20, 0x40, 0x41, 0x3F, 0x01}, // J
+    {0x7F, 0x08, 0x14, 0x22, 0x41}, // K
+    {0x7F, 0x40, 0x40, 0x40, 0x40}, // L
+    {0x7F, 0x02, 0x0C, 0x02, 0x7F}, // M
+    {0x7F, 0x04, 0x08, 0x10, 0x7F}, // N
+    {0x3E, 0x41, 0x41, 0x41, 0x3E}, // O
+    {0x7F, 0x09, 0x09, 0x09, 0x06}, // P
+    {0x3E, 0x41, 0x51, 0x21, 0x5E}, // Q
+    {0x7F, 0x09, 0x19, 0x29, 0x46}, // R
+    {0x46, 0x49, 0x49, 0x49, 0x31}, // S
+    {0x01, 0x01, 0x7F, 0x01, 0x01}, // T
+    {0x3F, 0x40, 0x40, 0x40, 0x3F}, // U
+    {0x1F, 0x20, 0x40, 0x20, 0x1F}, // V
+    {0x3F, 0x40, 0x38, 0x40, 0x3F}, // W
+    {0x63, 0x14, 0x08, 0x14, 0x63}, // X
+    {0x07, 0x08, 0x70, 0x08, 0x07}, // Y
+    {0x61, 0x51, 0x49, 0x45, 0x43}, // Z
+    {0x00, 0x00, 0x00, 0x00, 0x00}  // Space
+};
+
+void oled_draw_char(uint8_t x, uint8_t y, char c) {
+    if (c < 'A' || c > 'Z') c = 'Z' + 1;  // If not an uppercase letter, use space
+    const uint8_t *bitmap = font[c - 'A'];
+
+    for (uint8_t i = 0; i < 5; i++) {
+        oled_command(0x15);  // Set column address
+        oled_command(x + i);
+        oled_command(x + i);
+        oled_command(0x75);  // Set row address
+        oled_command(y);
+        oled_command(y + 7);
+
+        oled_data(bitmap[i]);
+    }
+}
+
+void oled_draw_string(uint8_t x, uint8_t y, const char *str) {
+    while (*str) {
+        oled_draw_char(x, y, *str++);
+        x += 6;  // Move to the next character position (5 pixels per character + 1 pixel space)
+        if (x >= 128) break;  // Stop if we reach the end of the screen
+    }
+}
+
+void oled_char(char c) {
+    if (c < 32 || c > 126) return;  // Unsupported character
+    for (uint8_t i = 0; i < 5; i++) {
+        oled_data(pgm_read_byte(&font5x7[c - 32][i]));
+    }
+    oled_data(0x00);  // Space between characters
+}
+
+
+void oled_string(const char *str) {
+    while (*str) {
+        oled_char(*str++);
+    }
+}
+void oled_set_cursor(uint8_t column, uint8_t row) {
+    oled_command(0x15);  // Set column address
+    oled_command(column);
+    oled_command(0x7F);
+    oled_command(0x75);  // Set row address
+    oled_command(row);
+    oled_command(0x7F);
+}
+
+void display_test_pattern(void) {
+    for (uint8_t page = 0; page < 8; page++) {
+        oled_command(0xB0 + page);  // Set page address
+        oled_command(0x00);  // Set lower column address
+        oled_command(0x10);  // Set higher column address
+        for (uint8_t col = 0; col < 128; col++) {
+            oled_data(0xFF);  // Example data
+        }
+    }
+}
+
 void oled_init(void) {
     // Example initialization sequence (refer to SSD1327 datasheet)
+    _delay_ms(300);
+    /*
     oled_command(0xAE); // Display off
     oled_command(0xA8); // Set multiplex ratio
     oled_command(0x7F); // 128MUX
@@ -134,6 +237,147 @@ void oled_init(void) {
     oled_command(0xA4); // Normal display
     oled_command(0xA6); // Set normal display mode
     oled_command(0xAF); // Display on
+    */
+      /*
+    oled_command(0xAE);  // Display off
+    oled_command(0x15);  // Set column address
+    oled_command(0x00);
+    oled_command(0x7F);
+    oled_command(0x75);  // Set row address
+    oled_command(0x00);
+    oled_command(0x7F);
+    // Additional initialization commands go here
+    oled_command(0xAF);  // Display on
+    */
+
+    /*
+    oled_command(0xAE);  // Display off
+    oled_command(0x81);  // Set contrast control
+    oled_command(0x80);  // Contrast value
+    oled_command(0xA0);  // Segment remap
+    oled_command(0x51);  // Enable external VSL
+    oled_command(0xA1);  // Set display start line
+    oled_command(0x00);
+    oled_command(0xA2);  // Set display offset
+    oled_command(0x00);
+    oled_command(0xA4);  // Normal display
+    
+    oled_command(0xA8);  // Set multiplex ratio
+    oled_command(0x3F);  // Duty = 1/64
+    oled_command(0xAD);  // Set master configuration
+    //oled_command(0x8E);  // External VCC supply // wird heller ohne
+    oled_command(0xB0);  // Set page start address
+    oled_command(0x00);
+    oled_command(0xB1);  // Set phase length
+    oled_command(0x31);
+    oled_command(0xB3);  // Set display clock divide ratio/oscillator frequency
+    oled_command(0xF0);  // FOSC
+    oled_command(0x8A);  // Set pre-charge period
+    oled_command(0x64);
+    oled_command(0xB9);  // Use built-in linear LUT
+    oled_command(0xBC);  // Pre-charge voltage
+    oled_command(0x10);  // Pre-charge voltage level
+    oled_command(0xBE);  // Set VCOMH
+    oled_command(0x07);  // VCOMH value
+    oled_command(0xAF);  // Display ON
+    */
+      /*
+      // es gibt aktionen auf dem Screen, rauschen
+    oled_command(0xAE);  // Display off
+    oled_command(0x15);  // Set column address
+    oled_command(0x00);
+    oled_command(0x7F);
+    oled_command(0x75);  // Set row address
+    oled_command(0x00);
+    oled_command(0x7F);
+    oled_command(0x81);  // Set contrast control
+    oled_command(0x80);
+    oled_command(0xA0);  // Segment remap
+    oled_command(0x51);
+    oled_command(0xA1);  // Set display start line
+    oled_command(0x00);
+    oled_command(0xA2);  // Set display offset
+    oled_command(0x00);
+    oled_command(0xA4);  // Normal display
+    oled_command(0xA8);  // Set multiplex ratio
+    oled_command(0x3F);
+    oled_command(0xB1);  // Set phase length
+    oled_command(0xF1);
+    oled_command(0xB3);  // Set display clock divide ratio
+    oled_command(0x00);
+    oled_command(0xAB);  // Enable internal VDD regulator
+    oled_command(0x01);
+    oled_command(0xB6);  // Set second pre-charge period
+    oled_command(0x08);
+    oled_command(0xBE);  // Set VCOMH
+    oled_command(0x07);
+    oled_command(0xBC);  // Set pre-charge voltage
+    oled_command(0x1F);
+    oled_command(0xAF);  // Display on
+*/
+/*
+// full screen, schraeges Muster
+oled_command(0xAE);  // Display off
+    oled_command(0x15);  // Set column address
+    oled_command(0x00);  // Start column
+    oled_command(0x7F);  // End column
+    oled_command(0x75);  // Set row address
+    oled_command(0x00);  // Start row
+    oled_command(0x7F);  // End row
+    oled_command(0x81);  // Set contrast control
+    oled_command(0x80);  // Contrast value
+    oled_command(0xA0);  // Set re-map and data format
+    oled_command(0x74);  // Horizontal address increment
+    oled_command(0xA1);  // Set display start line
+    oled_command(0x00);  // Start line
+    oled_command(0xA2);  // Set display offset
+    oled_command(0x00);  // Offset value
+    oled_command(0xA4);  // Normal display
+    oled_command(0xA8);  // Set multiplex ratio
+    oled_command(0x7F);  // 1/128 duty
+    oled_command(0xB3);  // Set display clock divide ratio/oscillator frequency
+    oled_command(0xF0);  // Divide ratio
+    oled_command(0x8A);  // Set Master Configuration
+    oled_command(0x64);  // Configuration value
+    oled_command(0xD5);  // Set Function Selection
+    oled_command(0xA1);  // Enable internal VDD regulator
+    oled_command(0xD9);  // Set pre-charge period
+    oled_command(0x22);  // Pre-charge period
+    oled_command(0xDB);  // Set VCOMH deselect level
+    oled_command(0x30);  // VCOMH level
+    oled_command(0xAD);  // Set second pre-charge period
+    oled_command(0x8A);  // Second pre-charge period
+    oled_command(0xAF);  // Display on
+    */
+    // 
+    oled_command(0xAE);
+   oled_command(0x81);
+   oled_command(0x80);
+   oled_command(0xA0);
+   oled_command(0x51);
+   oled_command(0xA1);
+   oled_command(0x00);
+   oled_command(0xA2);
+   oled_command(0x00);
+   oled_command(0xA6);
+   oled_command(0x7F);
+   oled_command(0xB1);
+   oled_command(0x11);
+   oled_command(0xB3);
+   oled_command(0x00);
+   oled_command(0xAB);
+   oled_command(0x01);
+   oled_command(0xB6);
+   oled_command(0x04);
+   oled_command(0x0F);
+   oled_command(0xBC);
+   oled_command(0x08);
+   oled_command(0xD5);
+   oled_command(0x62);
+   oled_command(0xFD);
+   oled_command(0x12);
+   oled_command(0xA4);
+   oled_command(0xAF);
 }
 
 
@@ -254,9 +498,10 @@ int main (void)
 	_delay_ms(800);
 	lcd_cls();
 	lcd_puts("A328_PIO_Start");
+
 	_delay_ms(2);
    i2c_init();
-_delay_ms(2);
+   _delay_ms(2);
    oled_init();
    _delay_ms(2);
 	//uint16_t loopcount0=0;
@@ -299,25 +544,25 @@ _delay_ms(2);
 
                // OLED
                SYNC_LO();
-         
-               oled_command(0x21); // Column address
-               oled_command(0x00); // Column start address
-               oled_command(0x7F); // Column end address
-               oled_command(0x22); // Page address
-               oled_command(0x00); // Page start address
-               oled_command(0x07); // Page end address
+               //oled_set_cursor(0, loopcount2%4);  // Set cursor to top-left corner
 
-               for (uint16_t i = 0; i < 128 * 8; i++) 
-               {
-                  oled_data(0xFF); // Fill the screen with pattern
-               }
+               //oled_command(0x15);  // Set column address
+               //oled_draw_string(0, 0, "HELLO WORLD");
+               oled_string("Hello, World!");
+               //oled_string("Hello, World!");
+               //oled_string("Hello, World!");
+               //oled_string("Hello, World!");
+
+
+               //display_test_pattern();
+               
                SYNC_HI();
                if (loopcount2 > 10)
                {
                   loopcount2 = 0;
                 for (uint16_t i = 0; i < 128 * 8; i++) 
                {
-                     oled_data(0x00); // Clear the screen
+                     //oled_data(0x00); // Clear the screen
                }
                  
                }
