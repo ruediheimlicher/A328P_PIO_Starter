@@ -310,7 +310,6 @@ void oled_init(void) {
     oled_command(0xA2);  // Set display offset
     oled_command(0x00);
     oled_command(0xA4);  // Normal display
-    
     oled_command(0xA8);  // Set multiplex ratio
     oled_command(0x3F);  // Duty = 1/64
     oled_command(0xAD);  // Set master configuration
@@ -533,13 +532,9 @@ void int0_init(void)
 
 
 int main (void) 
-{
-   
-   
+{ 
 	slaveinit();
-   //Serial.begin(9600);
- //  int0_init();
-	
+  	
 	// initialize the LCD 
 	lcd_initialize(LCD_FUNCTION_8x2, LCD_CMD_ENTRY_INC, LCD_CMD_ON);
 
@@ -548,20 +543,12 @@ int main (void)
 	lcd_cls();
 	lcd_puts("A328_PIO_Start");
 
-	_delay_ms(2);
-   //i2c_init();
-   _delay_ms(2);
-   //oled_init();
-   _delay_ms(2);
-	//uint16_t loopcount0=0;
+	
    uint16_t loopcount0=0;
    uint16_t loopcount1=0;
    uint16_t loopcount2=0;
 
 	
-	_delay_ms(2);
-   //u8x8.begin(); // blocks loop
-   _delay_ms(2);
    sei();
    // Adafruit
    display.begin(0x3D, OLED_RESET);
@@ -573,18 +560,9 @@ int main (void)
 	while (1)
    {  
       //OSZI_B_LO();
-      // Timing: loop: 40 us, takt 85us, mit if-teil 160 us
-      wdt_reset();
-      
-      
-         
          loopcount0++;
          if (loopcount0>=2*refreshtakt)
          {
-            //OSZI_B_LO();
-            //OSZIATOG;
-            //LOOPLEDPORT ^= (1<<LOOPLED); 
-            
             loopcount0=0;
             loopcount1++;
             if (loopcount1>=refreshtakt)
@@ -601,7 +579,7 @@ int main (void)
 
                //oled_command(0x15);  // Set column address
                //oled_draw_string(0, 0, "HELLO WORLD");
-               oled_string("Hello, World!");
+               //oled_string("Hello, World!");
                //oled_string("Hello, World!");
                //oled_string("Hello, World!");
                //oled_string("Hello, World!");
@@ -613,11 +591,7 @@ int main (void)
                if (loopcount2 > 10)
                {
                   loopcount2 = 0;
-                for (uint16_t i = 0; i < 128 * 8; i++) 
-               {
-                     //oled_data(0x00); // Clear the screen
-               }
-                 
+      
                }
                
 
