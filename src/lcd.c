@@ -212,7 +212,7 @@ Returns:  none
 void lcd_puts(const char *s)
 /* print string on lcd (no auto linefeed) */
 {
-    register char c;
+    char c;
 
     while ( (c = *s++) ) {
         lcd_putc(c);
