@@ -212,7 +212,7 @@ Returns:  none
 void lcd_puts(const char *s)
 /* print string on lcd (no auto linefeed) */
 {
-    register char c;
+    char c;
 
     while ( (c = *s++) ) {
         lcd_putc(c);
@@ -267,7 +267,7 @@ void lcd_puthex(uint8_t zahl)
 {
 	//char string[5];
 	char string[3];
-	uint8_t i,l,h;                             // schleifenz�hler
+	uint8_t l,h;                             // schleifenz�hler
 	
 	string[2]='\0';                       // String Terminator
 	l=(zahl % 16);
